@@ -56,6 +56,20 @@ jobs:
             $MAJOR = $parts[0]
             $MINOR = if ($parts.Length -gt 1) { $parts[1] } else { 0 }
             $PATCH = if ($parts.Length -gt 2) { $parts[2] } else { 0 }
+
+            # Validate that MAJOR, MINOR, and PATCH are numeric to avoid cryptic RC/compile errors.
+            if ($MAJOR -notmatch '^\d+$') {
+              Write-Error "Invalid version '$versionInput': major version '$MAJOR' is not numeric. Expected format: MAJOR[.MINOR[.PATCH]] with numeric components."
+              exit 1
+            }
+            if ($parts.Length -gt 1 -and $MINOR -notmatch '^\d+$') {
+              Write-Error "Invalid version '$versionInput': minor version '$MINOR' is not numeric. Expected format: MAJOR[.MINOR[.PATCH]] with numeric components."
+              exit 1
+            }
+            if ($parts.Length -gt 2 -and $PATCH -notmatch '^\d+$') {
+              Write-Error "Invalid version '$versionInput': patch version '$PATCH' is not numeric. Expected format: MAJOR[.MINOR[.PATCH]] with numeric components."
+              exit 1
+            }
             (Get-Content src/version.h) `
               -replace '#define\s+RELEASE_VER_MAIN.*', "#define RELEASE_VER_MAIN $MAJOR" `
               -replace '#define\s+RELEASE_VER_SUB.*', "#define RELEASE_VER_SUB $MINOR" `
