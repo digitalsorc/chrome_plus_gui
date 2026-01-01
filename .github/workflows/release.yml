@@ -88,11 +88,17 @@ jobs:
       - name: Package SetDll
         run: |
           artifact_dir="build_artifacts/chromeplus-x64-${{ env.VERSION }}"
+          version_dll="$artifact_dir/version.dll"
+          if [ ! -f "$version_dll" ]; then
+            echo "Expected version DLL not found at '$version_dll'"
+            ls -Al "$artifact_dir" || true
+            exit 1
+          fi
           mkdir -p setdll_package_contents
           wget -O setdll_latest.7z ${{ steps.setdll.outputs.download_url }}
           7z x setdll_latest.7z -o./setdll_package_contents
           rm setdll_latest.7z
-          cp "$artifact_dir/version.dll" ./setdll_package_contents/version-x64.dll
+          cp "$version_dll" ./setdll_package_contents/version-x64.dll
           cp ./src/chrome++.ini ./setdll_package_contents/chrome++.ini
           cd setdll_package_contents
           echo "Contents of 'setdll_package_contents' directory before zipping:"

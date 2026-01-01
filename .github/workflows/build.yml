@@ -50,7 +50,7 @@ jobs:
             (Get-Content src/version.h) -replace '#define\s+RELEASE_VER_STR.*', "#define RELEASE_VER_STR `"$version`"" | Set-Content src/version.h
           } elseif ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
             $versionInput = "${{ github.event.inputs.version }}"
-            $version = $versionInput -replace '^[vV]', ''
+            $version = $versionInput -replace '^[vV]+', ''
             Write-Output "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding ascii -Append
             $parts = $version -split '\.'
             $MAJOR = $parts[0]
@@ -104,11 +104,11 @@ jobs:
 
           # Prefer DLL (expected output); fall back to EXE if present
           $artifact = Get-ChildItem -Path $PWD -Recurse -Include *.dll -File `
-                        | Where-Object { $_.FullName -notmatch '\\.git\\' -and $_.FullName -notmatch '\\xmake\\' } `
+                        | Where-Object { $_.FullName -notmatch '\\.git\\' -and $_.FullName -notmatch 'build\\.xmake\\' } `
                         | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if ($null -eq $artifact) {
             $artifact = Get-ChildItem -Path $PWD -Recurse -Include *.exe -File `
-                          | Where-Object { $_.FullName -notmatch '\\.git\\' -and $_.FullName -notmatch '\\xmake\\' } `
+                          | Where-Object { $_.FullName -notmatch '\\.git\\' -and $_.FullName -notmatch 'build\\.xmake\\' } `
                           | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           }
 
