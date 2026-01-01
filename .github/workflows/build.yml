@@ -31,7 +31,8 @@ jobs:
             arch: arm64
 
     name: ${{ matrix.name }}
-    runs-on: windows-2025
+    # windows-2022 is a supported runner; windows-2025 likely does not exist
+    runs-on: windows-2022
 
     steps:
       - name: Checkout Repo
@@ -40,42 +41,73 @@ jobs:
           submodules: 'true'
 
       - name: Update version.h
-        shell: bash
+        # Use PowerShell on the Windows runner to safely update the header cross-platform.
+        shell: pwsh
         run: |
-          if [ "${{ github.event_name }}" == "push" ]; then
-            COMMIT_HASH=$(git rev-parse --short HEAD)
-            VERSION="alpha-${COMMIT_HASH}"
-            echo "VERSION=$VERSION" >> $GITHUB_ENV
-            sed -i '/#define RELEASE_VER_STR/,/TOSTRING(RELEASE_VER_FIX)/c\#define RELEASE_VER_STR "'"$VERSION"'"' src/version.h
-          elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-            echo "VERSION=$VERSION" >> $GITHUB_ENV
-            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
-            sed -i 's/#define RELEASE_VER_MAIN .*/#define RELEASE_VER_MAIN '"$MAJOR"'/' src/version.h
-            sed -i 's/#define RELEASE_VER_SUB .*/#define RELEASE_VER_SUB '"$MINOR"'/' src/version.h 
-            sed -i 's/#define RELEASE_VER_FIX .*/#define RELEASE_VER_FIX '"$PATCH"'/' src/version.h
-          fi
-
-      - name: Set CLANG_BIN
-        shell: bash
-        run: |
-          CLANG_BIN=$(dirname "$(where clang-cl | head -n 1)")
-          echo "CLANG_BIN=$CLANG_BIN" >> $GITHUB_ENV
+          if ($env:GITHUB_EVENT_NAME -eq "push") {
+            $commit = git rev-parse --short HEAD
+            $version = "alpha-$commit"
+            Write-Output "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding ascii -Append
+            (Get-Content src/version.h) -replace '#define\s+RELEASE_VER_STR.*', "#define RELEASE_VER_STR `"$version`"" | Set-Content src/version.h
+          } elseif ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
+            $version = "${{ github.event.inputs.version }}"
+            Write-Output "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding ascii -Append
+            $parts = $version -split '\.'
+            $MAJOR = $parts[0]
+            $MINOR = if ($parts.Length -gt 1) { $parts[1] } else { 0 }
+            $PATCH = if ($parts.Length -gt 2) { $parts[2] } else { 0 }
+            (Get-Content src/version.h) `
+              -replace '#define\s+RELEASE_VER_MAIN.*', "#define RELEASE_VER_MAIN $MAJOR" `
+              -replace '#define\s+RELEASE_VER_SUB.*', "#define RELEASE_VER_SUB $MINOR" `
+              -replace '#define\s+RELEASE_VER_FIX.*',  "#define RELEASE_VER_FIX $PATCH" |
+              Set-Content src/version.h
+          } else {
+            Write-Output "No version change (event: $env:GITHUB_EVENT_NAME)"
+          }
 
       - name: Setup Xmake
         uses: xmake-io/github-action-setup-xmake@v1
 
-      - name: Configure Xmake
-        run: xmake f -a ${{ matrix.arch }} --toolchain=clang-cl --bin="${{ env.CLANG_BIN }}" --yes
+      - name: Configure Xmake (Windows/MSVC)
+        # Use MSVC toolchain on the Windows runner to produce a working .exe reliably.
+        shell: bash
+        run: |
+          # xmake -p windows is explicit; build release for the chosen arch
+          xmake f -p windows -a ${{ matrix.arch }} -m release --vs="latest" --yes
 
       - name: Build Chrome++
-        run: xmake
+        shell: bash
+        run: |
+          # build recursively and show verbose output
+          xmake -v -r
+
+      - name: Locate built .exe and copy to artifacts folder
+        shell: pwsh
+        run: |
+          # Create artifacts dir
+          $artdir = Join-Path -Path $PWD -ChildPath "artifacts"
+          if (-Not (Test-Path $artdir)) { New-Item -ItemType Directory -Path $artdir | Out-Null }
+
+          # Find the most recently modified executable (exclude git folder and CI tools)
+          $exe = Get-ChildItem -Path $PWD -Recurse -Include *.exe -File `
+                   | Where-Object { $_.FullName -notmatch '\\.git\\' -and $_.FullName -notmatch '\\xmake\\' } `
+                   | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+
+          if ($null -eq $exe) {
+            Write-Error "No .exe built. Listing built files for debugging:"
+            Get-ChildItem -Path $PWD -Recurse -File | Where-Object { $_.Extension -ne "" } | Select-Object -First 200
+            exit 1
+          } else {
+            Write-Host "Found executable: $($exe.FullName)"
+            Copy-Item -Path $exe.FullName -Destination $artdir -Force
+            Get-ChildItem -Path $artdir
+          }
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: version-${{ matrix.arch }}-${{ env.VERSION }}
-          path: build/release/*
+          name: chromeplus-${{ matrix.arch }}-${{ env.VERSION }}
+          path: artifacts/*
 
   create_pr:
     needs: build
@@ -106,7 +138,7 @@ jobs:
 
       - name: Create Pull Request
         env:
-          GITHUB_TOKEN: ${{ secrets.TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr create --base main --head release --title "build(release): bump version to ${{ github.event.inputs.version }}" --body "Bump version to ${{ github.event.inputs.version }}"
 
