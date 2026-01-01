@@ -23,12 +23,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: build_x86
-            arch: x86
           - name: build_x64
             arch: x64
-          - name: build_arm64
-            arch: arm64
 
     name: ${{ matrix.name }}
     # windows-2022 is a supported runner; windows-2025 likely does not exist
@@ -50,7 +46,8 @@ jobs:
             Write-Output "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding ascii -Append
             (Get-Content src/version.h) -replace '#define\s+RELEASE_VER_STR.*', "#define RELEASE_VER_STR `"$version`"" | Set-Content src/version.h
           } elseif ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
-            $version = "${{ github.event.inputs.version }}"
+            $versionInput = "${{ github.event.inputs.version }}"
+            $version = $versionInput.TrimStart('v', 'V')
             Write-Output "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding ascii -Append
             $parts = $version -split '\.'
             $MAJOR = $parts[0]
@@ -88,20 +85,25 @@ jobs:
           $artdir = Join-Path -Path $PWD -ChildPath "artifacts"
           if (-Not (Test-Path $artdir)) { New-Item -ItemType Directory -Path $artdir | Out-Null }
 
-          # Find the most recently modified executable (exclude git folder and CI tools)
-          $exe = Get-ChildItem -Path $PWD -Recurse -Include *.exe -File `
-                   | Where-Object { $_.FullName -notmatch '\\.git\\' -and $_.FullName -notmatch '\\xmake\\' } `
-                   | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          # Prefer DLL (expected output); fall back to EXE if present
+          $artifact = Get-ChildItem -Path $PWD -Recurse -Include *.dll -File `
+                        | Where-Object { $_.FullName -notmatch '\\.git\\' -and $_.FullName -notmatch '\\xmake\\' } `
+                        | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if ($null -eq $artifact) {
+            $artifact = Get-ChildItem -Path $PWD -Recurse -Include *.exe -File `
+                          | Where-Object { $_.FullName -notmatch '\\.git\\' -and $_.FullName -notmatch '\\xmake\\' } `
+                          | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          }
 
-          if ($null -eq $exe) {
-            Write-Error "No .exe built. Listing built files for debugging:"
+          if ($null -eq $artifact) {
+            Write-Error "No build artifact found. Listing built files for debugging:"
             Get-ChildItem -Path $PWD -Recurse -File | Where-Object { $_.Extension -ne "" } | Select-Object -First 200
             exit 1
-          } else {
-            Write-Host "Found executable: $($exe.FullName)"
-            Copy-Item -Path $exe.FullName -Destination $artdir -Force
-            Get-ChildItem -Path $artdir
           }
+
+          Write-Host "Found artifact: $($artifact.FullName)"
+          Copy-Item -Path $artifact.FullName -Destination $artdir -Force
+          Get-ChildItem -Path $artdir
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v6
