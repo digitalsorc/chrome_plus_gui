@@ -95,7 +95,7 @@ jobs:
           # build recursively and show verbose output
           xmake -v -r
 
-      - name: Locate built .exe and copy to artifacts folder
+      - name: Locate built artifact (DLL or EXE) and copy to artifacts folder
         shell: pwsh
         run: |
           # Create artifacts dir
