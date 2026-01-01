@@ -72,8 +72,14 @@ jobs:
 
       - name: Package All Artifacts
         run: |
+          artifact_dir="build_artifacts/chromeplus-x64-${{ env.VERSION }}"
+          if [ ! -d "$artifact_dir" ]; then
+            echo "Expected artifact directory '$artifact_dir' not found"
+            ls -Al build_artifacts || true
+            exit 1
+          fi
           mkdir -p artifacts/x64/{App,Data,Cache}
-          cp -r build_artifacts/chromeplus-x64-${{ env.VERSION }}/* artifacts/x64/App/
+          cp -r "$artifact_dir"/* artifacts/x64/App/
           cp src/chrome++.ini artifacts/x64/App/
           cd artifacts
           7z a -mx=9 -m0=lzma2 -mmt=on ../Chrome++_v${{ env.VERSION }}_x64.7z *
@@ -81,11 +87,12 @@ jobs:
 
       - name: Package SetDll
         run: |
+          artifact_dir="build_artifacts/chromeplus-x64-${{ env.VERSION }}"
           mkdir -p setdll_package_contents
           wget -O setdll_latest.7z ${{ steps.setdll.outputs.download_url }}
           7z x setdll_latest.7z -o./setdll_package_contents
           rm setdll_latest.7z
-          cp ./build_artifacts/chromeplus-x64-${{ env.VERSION }}/version.dll ./setdll_package_contents/version-x64.dll
+          cp "$artifact_dir/version.dll" ./setdll_package_contents/version-x64.dll
           cp ./src/chrome++.ini ./setdll_package_contents/chrome++.ini
           cd setdll_package_contents
           echo "Contents of 'setdll_package_contents' directory before zipping:"

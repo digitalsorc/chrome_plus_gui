@@ -47,7 +47,7 @@ jobs:
             (Get-Content src/version.h) -replace '#define\s+RELEASE_VER_STR.*', "#define RELEASE_VER_STR `"$version`"" | Set-Content src/version.h
           } elseif ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
             $versionInput = "${{ github.event.inputs.version }}"
-            $version = $versionInput.TrimStart('v', 'V')
+            $version = $versionInput -replace '^[vV]', ''
             Write-Output "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding ascii -Append
             $parts = $version -split '\.'
             $MAJOR = $parts[0]
