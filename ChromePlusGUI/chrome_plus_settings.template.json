@@ -1,0 +1,34 @@
+{
+  "targetExecutable": "chrome.exe",
+  "executablePath": "C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe",
+  "settings": {
+    "portabilityMode": {
+      "enabled": false,
+      "tempDirectory": "%APPDATA%\\\\ChromePlusGUI\\\\Temp",
+      "dataLocation": "%APPDATA%\\\\ChromePlusGUI\\\\Data"
+    },
+    "tabEnhancements": {
+      "customTabColors": false,
+      "tabGrouping": true,
+      "sessionRestore": true,
+      "wheelSwitching": true
+    },
+    "chromeFlags": {
+      "flags": [
+        "--enable-features=TabGroups"
+      ]
+    },
+    "performance": {
+      "memoryLimitMb": 0,
+      "disableCache": false,
+      "disableExtensions": false
+    },
+    "security": {
+      "adBlocking": false,
+      "trackingPrevention": false,
+      "scriptSandboxing": true
+    }
+  },
+  "lastModified": "2026-01-01T00:00:00Z",
+  "version": "1.0"
+}
