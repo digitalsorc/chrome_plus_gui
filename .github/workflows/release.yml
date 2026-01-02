@@ -72,29 +72,34 @@ jobs:
 
       - name: Package All Artifacts
         run: |
-          mkdir -p artifacts/x86/{App,Data,Cache}
+          artifact_dir="build_artifacts/chromeplus-x64-${{ env.VERSION }}"
+          if [ ! -d "$artifact_dir" ]; then
+            echo "Expected artifact directory '$artifact_dir' not found"
+            ls -Al build_artifacts || true
+            exit 1
+          fi
           mkdir -p artifacts/x64/{App,Data,Cache}
-          mkdir -p artifacts/arm64/{App,Data,Cache}
-          cp -r build_artifacts/version-x86-${{ env.VERSION }}/* artifacts/x86/App/
-          cp -r build_artifacts/version-x64-${{ env.VERSION }}/* artifacts/x64/App/
-          cp -r build_artifacts/version-arm64-${{ env.VERSION }}/* artifacts/arm64/App/
-          cp src/chrome++.ini artifacts/x86/App/
-          cp src/chrome++.ini artifacts/x64/App/
-          cp src/chrome++.ini artifacts/arm64/App/
+          cp -r "$artifact_dir"/* "artifacts/x64/App/"
+          cp "src/chrome++.ini" "artifacts/x64/App/"
           cd artifacts
-          7z a -mx=9 -m0=lzma2 -mmt=on ../Chrome++_v${{ env.VERSION }}_x86_x64_arm64.7z *
+          7z a -mx=9 -m0=lzma2 -mmt=on "../Chrome++_v${{ env.VERSION }}_x64.7z" *
           cd ..
 
       - name: Package SetDll
         run: |
+          artifact_dir="build_artifacts/chromeplus-x64-${{ env.VERSION }}"
+          version_dll="$artifact_dir/version.dll"
+          if [ ! -f "$version_dll" ]; then
+            echo "Expected version DLL not found at '$version_dll'"
+            ls -Al "$artifact_dir" || true
+            exit 1
+          fi
           mkdir -p setdll_package_contents
           wget -O setdll_latest.7z ${{ steps.setdll.outputs.download_url }}
           7z x setdll_latest.7z -o./setdll_package_contents
           rm setdll_latest.7z
-          cp ./build_artifacts/version-x86-${{ env.VERSION }}/version.dll ./setdll_package_contents/version-x86.dll
-          cp ./build_artifacts/version-x64-${{ env.VERSION }}/version.dll ./setdll_package_contents/version-x64.dll
-          cp ./build_artifacts/version-arm64-${{ env.VERSION }}/version.dll ./setdll_package_contents/version-arm64.dll
-          cp ./src/chrome++.ini ./setdll_package_contents/chrome++.ini
+          cp "$version_dll" "./setdll_package_contents/version-x64.dll"
+          cp "./src/chrome++.ini" "./setdll_package_contents/chrome++.ini"
           cd setdll_package_contents
           echo "Contents of 'setdll_package_contents' directory before zipping:"
           ls -Al
@@ -105,14 +110,14 @@ jobs:
         uses: actions/attest-build-provenance@v3
         with:
           subject-path: |
-            Chrome++_v${{ env.VERSION }}_x86_x64_arm64.7z
+            Chrome++_v${{ env.VERSION }}_x64.7z
             setdll.7z
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            Chrome++_v${{ env.VERSION }}_x86_x64_arm64.7z
+            Chrome++_v${{ env.VERSION }}_x64.7z
             setdll.7z
           body_path: release.md
           tag_name: ${{ env.VERSION }}
